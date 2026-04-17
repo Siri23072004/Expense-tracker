@@ -265,12 +265,14 @@ margin:15px auto;
 <input id="text" placeholder="Description">
 <input id="amount" type="number" placeholder="Amount">
 <select id="categorySelect">
-<option value="Food">🍔 Food</option>
-<option value="Shopping">🛍️ Shopping</option>
-<option value="Travel">✈️ Travel</option>
-<option value="Bills">💡 Bills</option>
-<option value="Health">💊 Health</option>
-<option value="Other">📦 Other</option>
+    <option value="Food">🍔 Food</option>
+    <option value="Shopping">🛍️ Shopping</option>
+    <option value="Travel">✈️ Travel</option>
+    <option value="Bills">💡 Bills</option>
+    <option value="Health">💊 Health</option>
+    <option value="Entertainment">🎬 Entertainment</option>
+    <option value="Education">📚 Education</option>
+    <option value="Other">📦 Other</option>
 </select>
 <input type="date" id="dateInput">
 <select id="typeSelect">
@@ -338,7 +340,7 @@ margin:15px auto;
 </div>
 
 <script>
-const API = "http://localhost:5000";
+const API = "https://expense-backend-khaki.vercel.app/api/expenses";
 let currentEditId = null;
 let chart = null;
 
@@ -362,7 +364,7 @@ async function addTransaction() {
         return;
     }
     
-    const res = await fetch(`${API}/transactions`, {
+    const res = await fetch(`${API}/`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(transaction)
@@ -383,7 +385,7 @@ async function addTransaction() {
 // ========== DELETE ==========
 async function deleteTransaction(id) {
     if(confirm("Delete this transaction?")) {
-        await fetch(`${API}/transactions/${id}`, {method: "DELETE"});
+        await fetch(`${API}/${id}`, {method: "DELETE"});
         updateUI();
     }
 }
@@ -412,7 +414,7 @@ async function saveEdit() {
         type: type
     };
     
-    await fetch(`${API}/transactions/${currentEditId}`, {
+    await fetch(`${API}/${currentEditId}`, {
         method: "PUT",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(transaction)
@@ -427,7 +429,7 @@ async function filterTransactions() {
     const period = document.getElementById("periodFilter").value;
     const category = document.getElementById("categoryFilter").value;
     
-    const res = await fetch(`${API}/transactions?search=${search}&period=${period}&category=${category}`);
+    const res = await fetch(`${API}?search=${search}&period=${period}&category=${category}`);
     const transactions = await res.json();
     displayTransactions(transactions);
 }
@@ -524,7 +526,7 @@ async function addRecurring() {
 
 // ========== EXPORT CSV ==========
 async function exportCSV() {
-    const res = await fetch(`${API}/transactions`);
+    const res = await fetch(`${API}`);
     const transactions = await res.json();
     let csv = "Date,Description,Category,Amount\n";
     transactions.forEach(t => {
