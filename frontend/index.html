@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐻 Expense Tracker Dashboard - All Features 🎀</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+body{
+font-family:'Quicksand',sans-serif;
+background:linear-gradient(135deg,#ffe9f4,#ffd6e8);
+transition:0.3s;
+}
+body.dark{
+background:linear-gradient(135deg,#1a1a2e,#16213e);
+color:#eee;
+}
+.app{
+max-width:1400px;
+margin:auto;
+padding:20px;
+}
+.header{
+text-align:center;
+margin-bottom:20px;
+color:#ff8fab;
+}
+.layout{
+display:grid;
+grid-template-columns:2fr 1fr;
+gap:20px;
+}
+.card{
+background:#fff;
+border-radius:25px;
+padding:20px;
+box-shadow:0 10px 30px rgba(0,0,0,0.1);
+}
+body.dark .card{
+background:#2d2d44;
+}
+.balance{
+background:linear-gradient(135deg,#ffb7c5,#ff8fab);
+color:white;
+text-align:center;
+border-radius:20px;
+padding:20px;
+margin-bottom:15px;
+}
+.balance h1{font-size:40px}
+.stats{
+display:flex;
+gap:10px;
+margin-bottom:15px;
+}
+.stat{
+flex:1;
+background:#fff5f7;
+padding:15px;
+border-radius:15px;
+text-align:center;
+}
+body.dark .stat{
+background:#3d3d5c;
+}
+.income{color:#ff8fab}
+.expense{color:#ff4d6d}
+.filters{
+display:flex;
+gap:10px;
+margin-bottom:15px;
+flex-wrap:wrap;
+}
+.filters input,.filters select{
+flex:1;
+padding:8px;
+border-radius:10px;
+border:1px solid #ffb7c5;
+background:#fff5f7;
+}
+.item{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:12px;
+margin-bottom:8px;
+border-radius:12px;
+background:#fffafc;
+flex-wrap:wrap;
+}
+body.dark .item{
+background:#3d3d5c;
+}
+.item-info{
+flex:1;
+}
+.item-actions{
+display:flex;
+gap:10px;
+align-items:center;
+}
+.delete,.edit{
+cursor:pointer;
+padding:5px;
+}
+.delete{color:red}
+.edit{color:#ff8fab}
+.cat-summary{
+display:flex;
+flex-wrap:wrap;
+gap:10px;
+margin-bottom:15px;
+}
+.cat-chip{
+background:#ffb7c520;
+padding:5px 12px;
+border-radius:20px;
+font-size:12px;
+}
+.warning{
+background:#ffeb3b;
+color:#000;
+padding:10px;
+border-radius:12px;
+margin-bottom:15px;
+display:none;
+}
+input,select,button{
+width:100%;
+padding:12px;
+margin:6px 0;
+border-radius:12px;
+border:none;
+font-family:inherit;
+}
+input,select{
+background:#fff5f7;
+border:1px solid #ffb7c5;
+}
+body.dark input,body.dark select{
+background:#3d3d5c;
+color:#fff;
+}
+button{
+background:#ff8fab;
+color:white;
+font-weight:bold;
+cursor:pointer;
+}
+button:hover{
+background:#ff6ba6;
+}
+.modal{
+display:none;
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,0.5);
+justify-content:center;
+align-items:center;
+z-index:1000;
+}
+.modal-content{
+background:#fff;
+padding:25px;
+border-radius:25px;
+width:90%;
+max-width:450px;
+}
+body.dark .modal-content{
+background:#2d2d44;
+}
+.chart-container{
+max-width:300px;
+margin:15px auto;
+}
+@media(max-width:800px){
+.layout{grid-template-columns:1fr}
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+<div class="header">
+<h1>🐻  Expense Tracker Dashboard 🎀</h1>
+<p> Date | Edit | Delete | Budget | Filter | Search | Chart | Export | Recurring | Dark Mode</p>
+<button onclick="toggleDarkMode()" style="width:auto;margin-top:10px">🌙 Dark Mode</button>
+</div>
+
+<div class="layout">
+
+<!-- LEFT -->
+<div class="card">
+
+<div class="balance">
+<h3>Total Balance</h3>
+<h1 id="balance">₹0</h1>
+</div>
+
+<div class="stats">
+<div class="stat">
+<p>Income</p>
+<h3 id="income" class="income">₹0</h3>
+</div>
+<div class="stat">
+<p>Expense</p>
+<h3 id="expense" class="expense">₹0</h3>
+</div>
+</div>
+
+<!-- Filters -->
+<div class="filters">
+<input type="text" id="searchInput" placeholder="🔍 Search description..." onkeyup="filterTransactions()">
+<select id="periodFilter" onchange="filterTransactions()">
+<option value="all">📅 All Time</option>
+<option value="week">📆 This Week</option>
+<option value="month">📆 This Month</option>
+</select>
+<select id="categoryFilter" onchange="filterTransactions()">
+<option value="all">📂 All Categories</option>
+<option value="Food">🍔 Food</option>
+<option value="Shopping">🛍️ Shopping</option>
+<option value="Travel">✈️ Travel</option>
+<option value="Bills">💡 Bills</option>
+<option value="Health">💊 Health</option>
+<option value="Other">📦 Other</option>
+</select>
+</div>
+
+<!-- Category Summary -->
+<div id="categorySummary" class="cat-summary"></div>
+
+<!-- Budget Warning -->
+<div class="warning" id="budgetWarning"></div>
+
+<!-- Chart -->
+<div class="chart-container">
+<canvas id="expenseChart"></canvas>
+</div>
+
+<!-- Transaction List -->
+<div id="list"></div>
+
+<!-- Export Button -->
+<button onclick="exportCSV()" style="margin-top:10px">📎 Export to CSV</button>
+<button onclick="showRecurringModal()" style="margin-top:5px">🔄 Add Recurring Transaction</button>
+
+</div>
+
+<!-- RIGHT -->
+<div class="card">
+
+<h3>➕ Add Transaction</h3>
+<input id="text" placeholder="Description">
+<input id="amount" type="number" placeholder="Amount">
+<select id="categorySelect">
+<option value="Food">🍔 Food</option>
+<option value="Shopping">🛍️ Shopping</option>
+<option value="Travel">✈️ Travel</option>
+<option value="Bills">💡 Bills</option>
+<option value="Health">💊 Health</option>
+<option value="Other">📦 Other</option>
+</select>
+<input type="date" id="dateInput">
+<select id="typeSelect">
+<option value="expense">➖ Expense</option>
+<option value="income">➕ Income</option>
+</select>
+<button onclick="addTransaction()">Add Transaction</button>
+
+<hr style="margin:15px 0">
+
+<h3>🎯 Set Budget Limit (Monthly)</h3>
+<select id="budgetCategory">
+<option value="Food">Food</option>
+<option value="Shopping">Shopping</option>
+<option value="Travel">Travel</option>
+<option value="Bills">Bills</option>
+<option value="Health">Health</option>
+</select>
+<input type="number" id="budgetLimit" placeholder="Monthly limit amount">
+<button onclick="setBudget()">Set Budget</button>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- Edit Modal -->
+<div id="editModal" class="modal">
+<div class="modal-content">
+<h3>✏️ Edit Transaction</h3>
+<input type="text" id="editText" placeholder="Description">
+<input type="number" id="editAmount" placeholder="Amount">
+<input type="date" id="editDate">
+<select id="editCategory">
+<option>Food</option><option>Shopping</option><option>Travel</option>
+<option>Bills</option><option>Health</option><option>Other</option>
+</select>
+<select id="editType">
+<option value="expense">Expense</option>
+<option value="income">Income</option>
+</select>
+<button onclick="saveEdit()">Save</button>
+<button onclick="closeModal()">Cancel</button>
+</div>
+</div>
+
+<!-- Recurring Modal -->
+<div id="recurringModal" class="modal">
+<div class="modal-content">
+<h3>🔄 Recurring Transaction</h3>
+<input id="recText" placeholder="Description (e.g., Netflix, Rent)">
+<input id="recAmount" type="number" placeholder="Amount">
+<select id="recCategory">
+<option>Food</option><option>Shopping</option><option>Travel</option>
+<option>Bills</option><option>Health</option>
+</select>
+<select id="recFreq">
+<option value="weekly">Weekly</option>
+<option value="monthly">Monthly</option>
+</select>
+<button onclick="addRecurring()">Save Recurring</button>
+<button onclick="closeRecurringModal()">Cancel</button>
+</div>
+</div>
+
+<script>
+const API = "http://localhost:5000";
+let currentEditId = null;
+let chart = null;
+
+// ========== ADD TRANSACTION ==========
+async function addTransaction() {
+    const amount = parseFloat(document.getElementById("amount").value);
+    const type = document.getElementById("typeSelect").value;
+    
+    let finalAmount = type === 'expense' ? -Math.abs(amount) : Math.abs(amount);
+    
+    const transaction = {
+        text: document.getElementById("text").value,
+        amount: finalAmount,
+        category: document.getElementById("categorySelect").value,
+        date: document.getElementById("dateInput").value || new Date().toISOString().slice(0,10),
+        type: type
+    };
+    
+    if(!transaction.text || !amount) {
+        alert("Fill all fields!");
+        return;
+    }
+    
+    const res = await fetch(`${API}/transactions`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(transaction)
+    });
+    
+    const data = await res.json();
+    if(data.warning) {
+        document.getElementById("budgetWarning").innerHTML = data.warning;
+        document.getElementById("budgetWarning").style.display = "block";
+        setTimeout(() => document.getElementById("budgetWarning").style.display = "none", 3000);
+    }
+    
+    document.getElementById("text").value = "";
+    document.getElementById("amount").value = "";
+    updateUI();
+}
+
+// ========== DELETE ==========
+async function deleteTransaction(id) {
+    if(confirm("Delete this transaction?")) {
+        await fetch(`${API}/transactions/${id}`, {method: "DELETE"});
+        updateUI();
+    }
+}
+
+// ========== EDIT ==========
+function editTransaction(id, text, amount, date, category, type) {
+    currentEditId = id;
+    document.getElementById("editText").value = text;
+    document.getElementById("editAmount").value = Math.abs(amount);
+    document.getElementById("editDate").value = date;
+    document.getElementById("editCategory").value = category;
+    document.getElementById("editType").value = type || (amount > 0 ? 'income' : 'expense');
+    document.getElementById("editModal").style.display = "flex";
+}
+
+async function saveEdit() {
+    let amount = parseFloat(document.getElementById("editAmount").value);
+    const type = document.getElementById("editType").value;
+    amount = type === 'expense' ? -Math.abs(amount) : Math.abs(amount);
+    
+    const transaction = {
+        text: document.getElementById("editText").value,
+        amount: amount,
+        date: document.getElementById("editDate").value,
+        category: document.getElementById("editCategory").value,
+        type: type
+    };
+    
+    await fetch(`${API}/transactions/${currentEditId}`, {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(transaction)
+    });
+    closeModal();
+    updateUI();
+}
+
+// ========== FILTERS ==========
+async function filterTransactions() {
+    const search = document.getElementById("searchInput").value;
+    const period = document.getElementById("periodFilter").value;
+    const category = document.getElementById("categoryFilter").value;
+    
+    const res = await fetch(`${API}/transactions?search=${search}&period=${period}&category=${category}`);
+    const transactions = await res.json();
+    displayTransactions(transactions);
+}
+
+function displayTransactions(transactions) {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    let income = 0, expense = 0;
+    
+    transactions.forEach(t => {
+        if(t.amount > 0) income += t.amount;
+        else expense += Math.abs(t.amount);
+        
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = `
+            <div class="item-info">
+                <strong>${t.text}</strong><br>
+                <small>${t.date} | ${t.category}</small>
+            </div>
+            <div class="item-actions">
+                <span class="${t.amount>0?'income':'expense'}">₹${t.amount}</span>
+                <span class="edit" onclick="editTransaction('${t._id}','${t.text}',${t.amount},'${t.date}','${t.category}','${t.type}')">✏️</span>
+                <span class="delete" onclick="deleteTransaction('${t._id}')">❌</span>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+    
+    document.getElementById("balance").innerText = "₹" + (income - expense);
+    document.getElementById("income").innerText = "₹" + income;
+    document.getElementById("expense").innerText = "₹" + expense;
+}
+
+// ========== CATEGORY SUMMARY & CHART ==========
+async function updateCategorySummary() {
+    const res = await fetch(`${API}/category-summary`);
+    const summary = await res.json();
+    const container = document.getElementById("categorySummary");
+    container.innerHTML = "<strong>📊 This month spending:</strong> ";
+    summary.forEach(cat => {
+        container.innerHTML += `<span class="cat-chip">${cat._id}: ₹${cat.total}</span>`;
+    });
+    
+    // Update pie chart
+    const ctx = document.getElementById("expenseChart").getContext("2d");
+    if(chart) chart.destroy();
+    if(summary.length > 0) {
+        chart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: summary.map(c => c._id),
+                datasets: [{
+                    data: summary.map(c => c.total),
+                    backgroundColor: ['#ff8fab','#ffb7c5','#ff6ba6','#ff4d6d','#c9184a','#ffb3c6']
+                }]
+            },
+            options: { responsive: true }
+        });
+    }
+}
+
+// ========== BUDGET ==========
+async function setBudget() {
+    const category = document.getElementById("budgetCategory").value;
+    const limit = parseFloat(document.getElementById("budgetLimit").value);
+    await fetch(`${API}/budgets`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ category, limit })
+    });
+    alert(`✅ Budget set for ${category}: ₹${limit}`);
+    document.getElementById("budgetLimit").value = "";
+}
+
+// ========== RECURRING ==========
+async function addRecurring() {
+    const recurring = {
+        text: document.getElementById("recText").value,
+        amount: parseFloat(document.getElementById("recAmount").value),
+        category: document.getElementById("recCategory").value,
+        frequency: document.getElementById("recFreq").value
+    };
+    await fetch(`${API}/recurring`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(recurring)
+    });
+    alert("✅ Recurring transaction added! It will auto-add every " + recurring.frequency);
+    closeRecurringModal();
+    document.getElementById("recText").value = "";
+    document.getElementById("recAmount").value = "";
+}
+
+// ========== EXPORT CSV ==========
+async function exportCSV() {
+    const res = await fetch(`${API}/transactions`);
+    const transactions = await res.json();
+    let csv = "Date,Description,Category,Amount\n";
+    transactions.forEach(t => {
+        csv += `${t.date},${t.text},${t.category},${t.amount}\n`;
+    });
+    const blob = new Blob([csv], {type: "text/csv"});
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `expenses_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+}
+
+// ========== DARK MODE ==========
+function toggleDarkMode() {
+    document.body.classList.toggle("dark");
+}
+
+// ========== UI HELPERS ==========
+async function updateUI() {
+    await filterTransactions();
+    await updateCategorySummary();
+}
+
+function closeModal() { document.getElementById("editModal").style.display = "none"; }
+function showRecurringModal() { document.getElementById("recurringModal").style.display = "flex"; }
+function closeRecurringModal() { document.getElementById("recurringModal").style.display = "none"; }
+
+updateUI();
+setInterval(updateUI, 5000);
+</script>
+
+</body>
+</html>
