@@ -1,174 +1,189 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+require('dotenv').config();
 
 const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-mongoose.connect('mongodb://localhost:27017/expense_tracker');
+// MongoDB Connection - SIMPLE VERSION (no old options)
+mongoose.connect('mongodb://localhost:27017/expense-tracker')
+    .then(() => {
+        console.log('✅ MongoDB Connected Successfully!');
+    })
+    .catch((err) => {
+        console.error('❌ MongoDB Connection Error:', err.message);
+    });
 
-// Schemas
+// Transaction Schema
 const transactionSchema = new mongoose.Schema({
-    text: String,
-    amount: Number,
-    category: { type: String, default: 'Other' },
-    date: { type: String, default: () => new Date().toISOString().slice(0,10) },
-    type: { type: String, default: 'expense' }
-});
-
-const budgetSchema = new mongoose.Schema({
-    category: String,
-    limit: Number,
-    month: String
-});
-
-const recurringSchema = new mongoose.Schema({
-    text: String,
-    amount: Number,
-    category: String,
-    frequency: String, // 'weekly' or 'monthly'
-    lastAdded: String
+    text: { type: String, required: true },
+    amount: { type: Number, required: true },
+    category: { type: String, required: true },
+    date: { type: String, required: true },
+    type: { type: String, enum: ['income', 'expense'], required: true }
 });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);
+
+// Budget Schema
+const budgetSchema = new mongoose.Schema({
+    category: { type: String, required: true },
+    limit: { type: Number, required: true },
+    month: { type: String, default: () => new Date().toISOString().slice(0,7) }
+});
+
 const Budget = mongoose.model('Budget', budgetSchema);
+
+// Recurring Schema
+const recurringSchema = new mongoose.Schema({
+    text: { type: String, required: true },
+    amount: { type: Number, required: true },
+    category: { type: String, required: true },
+    frequency: { type: String, enum: ['weekly', 'monthly'], required: true },
+    active: { type: Boolean, default: true }
+});
+
 const Recurring = mongoose.model('Recurring', recurringSchema);
 
-// ============ TRANSACTIONS ============
-app.get('/transactions', async (req, res) => {
-    let query = {};
-    
-    if(req.query.search) {
-        query.text = { $regex: req.query.search, $options: 'i' };
-    }
-    if(req.query.category && req.query.category !== 'all') {
-        query.category = req.query.category;
-    }
-    if(req.query.period === 'week') {
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        query.date = { $gte: weekAgo.toISOString().slice(0,10) };
-    }
-    if(req.query.period === 'month') {
-        const monthAgo = new Date();
-        monthAgo.setMonth(monthAgo.getMonth() - 1);
-        query.date = { $gte: monthAgo.toISOString().slice(0,10) };
-    }
-    
-    const transactions = await Transaction.find(query).sort({ date: -1 });
-    res.json(transactions);
-});
+// ========== API ROUTES ==========
 
-app.post('/transactions', async (req, res) => {
-    const transaction = new Transaction(req.body);
-    await transaction.save();
-    
-    // Check budget warning
-    if(req.body.type === 'expense') {
-        const currentMonth = new Date().toISOString().slice(0,7);
-        const budget = await Budget.findOne({ category: req.body.category, month: currentMonth });
-        if(budget) {
-            const spent = await Transaction.aggregate([
-                { $match: { category: req.body.category, type: 'expense', date: { $regex: currentMonth } } },
-                { $group: { _id: null, total: { $sum: '$amount' } } }
-            ]);
-            const totalSpent = (spent[0]?.total || 0) + req.body.amount;
-            if(totalSpent > budget.limit) {
-                return res.json({ transaction, warning: `⚠️ ${req.body.category} budget exceeded! Limit: ₹${budget.limit}` });
-            }
+// Get all transactions
+app.get('/api/transactions', async (req, res) => {
+    try {
+        const { search, period, category } = req.query;
+        let query = {};
+        
+        if (search) {
+            query.text = { $regex: search, $options: 'i' };
         }
+        if (category && category !== 'all') {
+            query.category = category;
+        }
+        
+        const transactions = await Transaction.find(query).sort({ date: -1 });
+        res.json(transactions);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
-    res.json(transaction);
 });
 
-app.put('/transactions/:id', async (req, res) => {
-    const transaction = await Transaction.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(transaction);
-});
-
-app.delete('/transactions/:id', async (req, res) => {
-    await Transaction.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
-});
-
-// ============ BUDGET ============
-app.get('/budgets', async (req, res) => {
-    const budgets = await Budget.find();
-    res.json(budgets);
-});
-
-app.post('/budgets', async (req, res) => {
-    const month = new Date().toISOString().slice(0,7);
-    const budget = await Budget.findOneAndUpdate(
-        { category: req.body.category, month },
-        { limit: req.body.limit },
-        { upsert: true, new: true }
-    );
-    res.json(budget);
-});
-
-app.get('/category-summary', async (req, res) => {
-    const currentMonth = new Date().toISOString().slice(0,7);
-    const summary = await Transaction.aggregate([
-        { $match: { type: 'expense', date: { $regex: currentMonth } } },
-        { $group: { _id: '$category', total: { $sum: '$amount' } } }
-    ]);
-    res.json(summary);
-});
-
-// ============ RECURRING ============
-app.get('/recurring', async (req, res) => {
-    const recurring = await Recurring.find();
-    res.json(recurring);
-});
-
-app.post('/recurring', async (req, res) => {
-    const recurring = new Recurring(req.body);
-    await recurring.save();
-    res.json(recurring);
-});
-
-app.delete('/recurring/:id', async (req, res) => {
-    await Recurring.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
-});
-
-// Auto recurring
-async function processRecurring() {
-    const rules = await Recurring.find();
-    const today = new Date().toISOString().slice(0,10);
-    
-    for(const rule of rules) {
-        let shouldAdd = false;
-        if(!rule.lastAdded) shouldAdd = true;
-        else {
-            const last = new Date(rule.lastAdded);
-            if(rule.frequency === 'weekly') {
-                const next = new Date(last);
-                next.setDate(last.getDate() + 7);
-                if(new Date(today) >= next) shouldAdd = true;
-            } else if(rule.frequency === 'monthly') {
-                const next = new Date(last);
-                next.setMonth(last.getMonth() + 1);
-                if(new Date(today) >= next) shouldAdd = true;
+// Add transaction
+app.post('/api/transactions', async (req, res) => {
+    try {
+        const transaction = new Transaction(req.body);
+        await transaction.save();
+        
+        // Check budget warning
+        let warning = null;
+        if (transaction.type === 'expense') {
+            const month = transaction.date.slice(0,7);
+            const budget = await Budget.findOne({ 
+                category: transaction.category, 
+                month: month 
+            });
+            
+            if (budget) {
+                const expenses = await Transaction.find({
+                    category: transaction.category,
+                    type: 'expense',
+                    date: { $regex: `^${month}` }
+                });
+                const totalSpent = expenses.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+                
+                if (totalSpent > budget.limit) {
+                    warning = `⚠️ Budget exceeded for ${transaction.category}! Limit: ₹${budget.limit}`;
+                }
             }
         }
         
-        if(shouldAdd) {
-            await Transaction.create({
-                text: rule.text,
-                amount: -Math.abs(rule.amount),
-                category: rule.category,
-                type: 'expense',
-                date: today
-            });
-            rule.lastAdded = today;
-            await rule.save();
-        }
+        res.status(201).json({ transaction, warning });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
-}
-setInterval(processRecurring, 3600000);
-processRecurring();
+});
 
-app.listen(5000, () => console.log('Server running on port 5000'));
+// Update transaction
+app.put('/api/transactions/:id', async (req, res) => {
+    try {
+        const transaction = await Transaction.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true }
+        );
+        res.json(transaction);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Delete transaction
+app.delete('/api/transactions/:id', async (req, res) => {
+    try {
+        await Transaction.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Category summary
+app.get('/api/category-summary', async (req, res) => {
+    try {
+        const currentMonth = new Date().toISOString().slice(0,7);
+        const summary = await Transaction.aggregate([
+            {
+                $match: {
+                    type: 'expense',
+                    date: { $regex: `^${currentMonth}` }
+                }
+            },
+            {
+                $group: {
+                    _id: '$category',
+                    total: { $sum: { $abs: '$amount' } }
+                }
+            }
+        ]);
+        res.json(summary);
+    } catch (error) {
+        res.json([]);
+    }
+});
+
+// Set budget
+app.post('/api/budgets', async (req, res) => {
+    try {
+        const { category, limit } = req.body;
+        const month = new Date().toISOString().slice(0,7);
+        const budget = await Budget.findOneAndUpdate(
+            { category, month },
+            { limit, month },
+            { upsert: true, new: true }
+        );
+        res.json(budget);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Add recurring transaction
+app.post('/api/recurring', async (req, res) => {
+    try {
+        const recurring = new Recurring(req.body);
+        await recurring.save();
+        res.status(201).json(recurring);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`🐻 Expense Tracker Server running on port ${PORT}`);
+    console.log(`📍 API available at http://localhost:${PORT}/api/transactions`);
+});
